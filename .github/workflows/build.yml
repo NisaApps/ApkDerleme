@@ -1,0 +1,69 @@
+name: APK Derle
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: JDK 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Gradle kur
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Debug APK derle
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: gradle assembleDebug --stacktrace
+
+      - name: Debug APK'yı yükle
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: DynamicIsland-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Anahtar deposunu hazırla
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Release APK derle
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease --stacktrace
+
+      - name: APK'yı adlandır ve SHA-256 hesapla
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk app-release.apk
+          sha256sum app-release.apk | tee app-release.apk.sha256
+
+      - name: GitHub Release yayınla
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app-release.apk
+            app-release.apk.sha256
+          generate_release_notes: true
