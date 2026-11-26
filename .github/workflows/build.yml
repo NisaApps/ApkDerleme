@@ -13,9 +13,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Kodu al
         uses: actions/checkout@v4
+
+      - name: ZIP dosyasını aç
+        run: unzip -o DynamicIsland.zip
 
       - name: JDK 17 kur
         uses: actions/setup-java@v4
@@ -30,6 +34,7 @@ jobs:
 
       - name: Debug APK derle
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        working-directory: DynamicIsland
         run: gradle assembleDebug --stacktrace
 
       - name: Debug APK'yı yükle
@@ -37,26 +42,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DynamicIsland-debug
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Anahtar deposunu hazırla
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
-          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          path: DynamicIsland/app/build/outputs/apk/debug/*.apk
 
       - name: Release APK derle
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        working-directory: DynamicIsland
         run: gradle assembleRelease --stacktrace
 
-      - name: APK'yı adlandır ve SHA-256 hesapla
+      - name: Release APK'yı adlandır ve SHA-256 hesapla
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk app-release.apk
+          cp DynamicIsland/app/build/outputs/apk/release/app-release-unsigned.apk app-release.apk
           sha256sum app-release.apk | tee app-release.apk.sha256
 
       - name: GitHub Release yayınla
